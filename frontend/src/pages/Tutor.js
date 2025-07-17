@@ -18,6 +18,7 @@ function Tutor() {
   const [selectedFile, setSelectedFile] = useState(null); // Currently selected file for upload
   const [solution, setSolution] = useState(null); // Status messages for user feedback
   const [existingProblems, setExistingProblems] = useState([]); // Existing problems from database
+  const [ocrResult, setOcrResult] = useState(null); // OCR text extraction result
 
   // Custom hook for API operations
   const { 
@@ -60,6 +61,16 @@ function Tutor() {
   const handleFileSelect = (file) => {
     setSelectedFile(file);
     setSolution(null); // Clear any previous solutions
+    setOcrResult(null); // Clear any previous OCR results
+  };
+
+  /**
+   * Handles OCR result from FileUpload component
+   * @param {Object} result - OCR processing result
+   */
+  const handleOCRResult = (result) => {
+    setOcrResult(result);
+    console.log('📝 OCR Result received:', result);
   };
 
   /**
@@ -88,7 +99,16 @@ function Tutor() {
     setSolution({ type: 'loading', message: 'Analyzing and solving problem...' });
     
     try {
-      const problemData = await createAndSolveProblem({ files: [selectedFile] });
+      // Include OCR result in problem solving
+      const problemData = await createAndSolveProblem({ 
+        files: [selectedFile],
+        classification: {
+          problemType: 'algebra',
+          gradeLevel: 'high-school',
+          difficulty: 'medium'
+        },
+        ocrResult: ocrResult // Pass OCR text extraction results
+      });
       
       // Convert database problem to solution format
       if (problemData.success && problemData.data) {
@@ -103,7 +123,8 @@ function Tutor() {
             difficulty: problem.metadata.difficulty,
             timeSpent: problem.analytics.timeToSolve || 'N/A',
             subject: problem.metadata.subject,
-            approach: problem.solution.approach
+            approach: problem.solution.approach,
+            ocrText: problem.input.textInput?.processedText || 'No text extracted'
           }
         });
 
@@ -204,6 +225,7 @@ function Tutor() {
             selectedFile={selectedFile}
             onFileSelect={handleFileSelect}
             onUpload={handleUpload}
+            onOCRResult={handleOCRResult}
             isLoading={isLoading}
           />
 

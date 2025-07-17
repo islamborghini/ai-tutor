@@ -85,19 +85,49 @@ const SolutionDisplay = ({ solution }) => {
   );
 
   /**
-   * Renders solution metadata (confidence, processing time)
+   * Renders solution metadata (confidence, processing time, OCR text)
    */
   const renderMetadata = () => (
-    <div className="flex justify-between items-center text-sm text-white text-opacity-70 mt-4 pt-4 border-t border-white border-opacity-20">
-      {solution.confidence !== undefined && (
-        <span>
-          Confidence: {Math.round(solution.confidence * 100)}%
-        </span>
+    <div className="mt-4 pt-4 border-t border-white border-opacity-20 space-y-3">
+      {/* Performance metrics */}
+      <div className="flex justify-between items-center text-sm text-white text-opacity-70">
+        {solution.confidence !== undefined && (
+          <span>
+            Confidence: {Math.round(solution.confidence * 100)}%
+          </span>
+        )}
+        {solution.processingTime !== undefined && (
+          <span>
+            Processed in: {(solution.processingTime / 1000).toFixed(1)}s
+          </span>
+        )}
+      </div>
+      
+      {/* OCR extracted text */}
+      {solution.metadata?.ocrText && solution.metadata.ocrText !== 'No text extracted' && (
+        <div className="text-sm">
+          <div className="text-white text-opacity-80 font-medium mb-2">
+            📝 Extracted Text:
+          </div>
+          <div className="bg-white bg-opacity-10 rounded-lg p-3 text-white text-opacity-90 font-mono text-xs">
+            {solution.metadata.ocrText}
+          </div>
+        </div>
       )}
-      {solution.processingTime !== undefined && (
-        <span>
-          Processed in: {(solution.processingTime / 1000).toFixed(1)}s
-        </span>
+      
+      {/* Additional metadata */}
+      {solution.metadata && (
+        <div className="flex flex-wrap gap-4 text-sm text-white text-opacity-70">
+          {solution.metadata.difficulty && (
+            <span>📊 {solution.metadata.difficulty}</span>
+          )}
+          {solution.metadata.subject && (
+            <span>📖 {solution.metadata.subject}</span>
+          )}
+          {solution.metadata.timeSpent && (
+            <span>⏱️ {solution.metadata.timeSpent}</span>
+          )}
+        </div>
       )}
     </div>
   );
