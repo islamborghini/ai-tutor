@@ -17,9 +17,41 @@ function Tutor() {
   // State management for file and status
   const [selectedFile, setSelectedFile] = useState(null); // Currently selected file for upload
   const [solution, setSolution] = useState(null); // Status messages for user feedback
+  const [existingProblems, setExistingProblems] = useState([]); // Existing problems from database
 
   // Custom hook for API operations
-  const { isLoading, uploadFile, solveProblem, generateVideo } = useAITutorAPI();
+  const { 
+    isLoading, 
+    uploadFile, 
+    generateVideo, 
+    createAndSolveProblem,
+    getProblems
+  } = useAITutorAPI();
+
+  // Load existing problems on component mount
+  React.useEffect(() => {
+    let isMounted = true; // Cleanup flag to prevent state updates on unmounted component
+    
+    const loadProblems = async () => {
+      try {
+        const result = await getProblems({ limit: 5 });
+        // Only update state if component is still mounted
+        if (isMounted && result.success) {
+          setExistingProblems(result.data.problems);
+        }
+      } catch (error) {
+        console.error('Failed to load existing problems:', error);
+      }
+    };
+    
+    loadProblems();
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run once on mount to prevent infinite re-renders
 
   /**
    * Handles file selection from FileUpload component
@@ -45,29 +77,46 @@ function Tutor() {
   };
 
   /**
-   * Handles problem solving using the custom hook
+   * Handles problem solving using the database integration
    */
   const handleSolveProblem = async () => {
-    setSolution({ type: 'loading', message: 'Solving problem...' });
-    const result = await solveProblem('Sample math problem');
+    if (!selectedFile) {
+      alert('Please select a file first');
+      return;
+    }
+
+    setSolution({ type: 'loading', message: 'Analyzing and solving problem...' });
     
-    // Create a solution object with steps
-    if (result.success) {
-      setSolution({ 
-        type: 'solution', 
-        title: 'Problem Solution',
-        steps: [
-          { number: 1, content: result.message },
-          { number: 2, content: 'Additional explanation or steps would appear here' }
-        ],
-        metadata: {
-          difficulty: 'Medium',
-          timeSpent: '2 minutes',
-          subject: 'Mathematics'
+    try {
+      const problemData = await createAndSolveProblem({ files: [selectedFile] });
+      
+      // Convert database problem to solution format
+      if (problemData.success && problemData.data) {
+        const problem = problemData.data;
+        setSolution({ 
+          type: 'solution', 
+          title: problem.metadata.title || 'Problem Solution',
+          steps: problem.solution.steps.map((step) => 
+            step.description || step.content || 'Solution step'
+          ),
+          metadata: {
+            difficulty: problem.metadata.difficulty,
+            timeSpent: problem.analytics.timeToSolve || 'N/A',
+            subject: problem.metadata.subject,
+            approach: problem.solution.approach
+          }
+        });
+
+        // Refresh existing problems list
+        const updatedProblems = await getProblems({ limit: 5 });
+        if (updatedProblems.success) {
+          setExistingProblems(updatedProblems.data.problems);
         }
-      });
-    } else {
-      setSolution({ type: 'error', message: result.message || 'Failed to solve problem' });
+      } else {
+        setSolution({ type: 'error', message: problemData.message || 'Failed to solve problem' });
+      }
+    } catch (error) {
+      setSolution({ type: 'error', message: error.message || 'Failed to solve problem' });
     }
   };
 
@@ -111,6 +160,45 @@ function Tutor() {
 
         {/* Main Content */}
         <main className="max-w-4xl mx-auto">
+          {/* Existing Problems Section */}
+          {existingProblems.length > 0 && (
+            <div className="mb-8 p-6 bg-white bg-opacity-10 rounded-lg backdrop-blur-sm">
+              <h2 className="text-2xl font-semibold mb-4">📚 Recent Problems</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {existingProblems.map((problem) => (
+                  <div 
+                    key={problem._id} 
+                    className="p-4 bg-white bg-opacity-5 rounded-lg hover:bg-opacity-10 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setSolution({
+                        type: 'solution',
+                        title: problem.metadata.title || 'Saved Problem',
+                        steps: problem.solution.steps.map((step) => 
+                          step.description || step.content || 'Solution step'
+                        ),
+                        metadata: {
+                          difficulty: problem.metadata.difficulty,
+                          subject: problem.metadata.subject,
+                          approach: problem.solution.approach,
+                          savedAt: new Date(problem.createdAt).toLocaleDateString()
+                        }
+                      });
+                    }}
+                  >
+                    <h3 className="font-medium text-lg mb-2">
+                      {problem.metadata.title || `Problem ${problem._id.slice(-6)}`}
+                    </h3>
+                    <div className="text-sm text-white text-opacity-70">
+                      <span className="mr-4">📊 {problem.metadata.difficulty}</span>
+                      <span className="mr-4">📖 {problem.metadata.subject}</span>
+                      <span>{new Date(problem.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* File upload section */}
           <FileUpload
             selectedFile={selectedFile}

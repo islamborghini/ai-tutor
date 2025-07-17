@@ -148,11 +148,158 @@ const useAITutorAPI = () => {
     }
   };
 
+  /**
+   * Creates a problem in the database and retrieves solution steps
+   * Integrates file upload with database storage and solution retrieval
+   * @param {Object} options - Options object containing files and classification
+   * @param {File[]} options.files - Array of uploaded problem image files
+   * @param {Object} options.classification - Problem classification data
+   * @returns {Object} Complete problem with solution steps
+   */
+  const createAndSolveProblem = async ({ files, classification = {} }) => {
+    setIsLoading(true);
+
+    try {
+      // Validate input
+      if (!files || !Array.isArray(files) || files.length === 0) {
+        throw new Error('No files provided');
+      }
+
+      const file = files[0]; // Use first file for now
+
+      // Step 1: Upload the file first
+      const uploadResult = await uploadFile(file);
+      if (!uploadResult.success) {
+        return uploadResult;
+      }
+
+      // Step 2: Create problem in database
+      const problemData = {
+        input: {
+          originalImage: {
+            url: uploadResult.data.path,
+            filename: uploadResult.data.filename,
+            size: uploadResult.data.size
+          },
+          classification: {
+            problemType: classification.problemType || 'algebra',
+            gradeLevel: classification.gradeLevel || 'high-school',
+            difficulty: classification.difficulty || 'medium'
+          }
+        }
+      };
+
+      const response = await fetch('/api/problems', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(problemData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return {
+          success: true,
+          message: 'Problem created and ready for solving!',
+          data: result.data.problem
+        };
+      } else {
+        const error = await response.json();
+        return {
+          success: false,
+          message: `Database error: ${error.message}`
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error: ${error.message}`
+      };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Retrieves problems from the database with filtering options
+   * @param {Object} filters - Filtering options (problemType, gradeLevel, etc.)
+   * @returns {Object} Array of problems with pagination
+   */
+  const getProblems = async (filters = {}) => {
+    setIsLoading(true);
+
+    try {
+      const queryParams = new URLSearchParams(filters).toString();
+      const response = await fetch(`/api/problems?${queryParams}`);
+
+      if (response.ok) {
+        const result = await response.json();
+        return {
+          success: true,
+          message: `Found ${result.data.problems.length} problems`,
+          data: result.data
+        };
+      } else {
+        const error = await response.json();
+        return {
+          success: false,
+          message: `Error: ${error.message}`
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error: ${error.message}`
+      };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Gets a specific problem by ID with full solution steps
+   * @param {string} problemId - The problem ID to retrieve
+   * @returns {Object} Complete problem with solution steps
+   */
+  const getProblemById = async (problemId) => {
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`/api/problems/${problemId}`);
+
+      if (response.ok) {
+        const result = await response.json();
+        return {
+          success: true,
+          message: 'Problem retrieved successfully',
+          data: result.data.problem
+        };
+      } else {
+        const error = await response.json();
+        return {
+          success: false,
+          message: `Error: ${error.message}`
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error: ${error.message}`
+      };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     isLoading,
     uploadFile,
     solveProblem,
-    generateVideo
+    generateVideo,
+    createAndSolveProblem,
+    getProblems,
+    getProblemById
   };
 };
 

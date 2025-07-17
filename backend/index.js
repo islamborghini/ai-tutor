@@ -14,6 +14,9 @@ const morgan = require('morgan');
 const logger = require('./utils/logger');
 const { globalErrorHandler, AppError, asyncHandler, notFound } = require('./middleware/errorHandler');
 
+// Import database models
+const { Problem, User } = require('./models');
+
 const app = express();
 const port = 3001; // Backend runs on port 3001, frontend proxies from 3000
 
@@ -179,6 +182,168 @@ app.post('/api/generate-video', asyncHandler(async (req, res, next) => {
 }));
 
 /**
+ * Problem Management API Endpoints
+ * POST /api/problems - Create a new problem document
+ * GET /api/problems - Get all problems with filtering
+ * GET /api/problems/:id - Get specific problem by ID
+ * PUT /api/problems/:id - Update problem
+ * DELETE /api/problems/:id - Soft delete problem
+ */
+
+// Create new problem
+app.post('/api/problems', asyncHandler(async (req, res, next) => {
+  const problemData = req.body;
+  
+  // Validate required fields
+  if (!problemData.input || !problemData.input.originalImage || !problemData.input.classification) {
+    return next(new AppError('Missing required problem data', 400));
+  }
+  
+  try {
+    // Create new problem document
+    const problem = new Problem(problemData);
+    await problem.save();
+    
+    logger.info(`New problem created: ${problem._id}`);
+    
+    res.status(201).json({
+      status: 'success',
+      message: 'Problem created successfully',
+      data: { problem }
+    });
+  } catch (error) {
+    logger.error('Problem creation failed:', error);
+    return next(new AppError('Failed to create problem', 500));
+  }
+}));
+
+// Get all problems with filtering
+app.get('/api/problems', asyncHandler(async (req, res, next) => {
+  const { 
+    problemType, 
+    gradeLevel, 
+    difficulty, 
+    status = 'solved',
+    limit = 20,
+    page = 1 
+  } = req.query;
+  
+  // Build filter criteria
+  const filter = {
+    'metadata.isDeleted': false
+  };
+  
+  if (problemType) filter['input.classification.problemType'] = problemType;
+  if (gradeLevel) filter['input.classification.gradeLevel'] = gradeLevel;
+  if (difficulty) filter['input.classification.difficulty'] = difficulty;
+  if (status) filter['metadata.status'] = status;
+  
+  try {
+    const skip = (page - 1) * limit;
+    const problems = await Problem.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip(skip)
+      .populate('metadata.submittedBy', 'profile.username')
+      .select('-solution.aiProcessing -relationships.userProgress');
+    
+    const total = await Problem.countDocuments(filter);
+    
+    res.json({
+      status: 'success',
+      data: {
+        problems,
+        pagination: {
+          current: parseInt(page),
+          total: Math.ceil(total / limit),
+          count: problems.length,
+          totalProblems: total
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Failed to fetch problems:', error);
+    return next(new AppError('Failed to fetch problems', 500));
+  }
+}));
+
+// Get specific problem by ID
+app.get('/api/problems/:id', asyncHandler(async (req, res, next) => {
+  try {
+    const problem = await Problem.findById(req.params.id)
+      .populate('metadata.submittedBy', 'profile.username profile.avatar')
+      .populate('relationships.similarProblems', 'input.classification metadata.analytics');
+    
+    if (!problem || problem.metadata.isDeleted) {
+      return next(new AppError('Problem not found', 404));
+    }
+    
+    // Increment view count
+    await problem.incrementViewCount();
+    
+    res.json({
+      status: 'success',
+      data: { problem }
+    });
+  } catch (error) {
+    logger.error('Failed to fetch problem:', error);
+    return next(new AppError('Failed to fetch problem', 500));
+  }
+}));
+
+// Update problem
+app.put('/api/problems/:id', asyncHandler(async (req, res, next) => {
+  try {
+    const problem = await Problem.findById(req.params.id);
+    
+    if (!problem || problem.metadata.isDeleted) {
+      return next(new AppError('Problem not found', 404));
+    }
+    
+    // Update problem with new data
+    Object.assign(problem, req.body);
+    await problem.save();
+    
+    logger.info(`Problem updated: ${problem._id}`);
+    
+    res.json({
+      status: 'success',
+      message: 'Problem updated successfully',
+      data: { problem }
+    });
+  } catch (error) {
+    logger.error('Failed to update problem:', error);
+    return next(new AppError('Failed to update problem', 500));
+  }
+}));
+
+// Soft delete problem
+app.delete('/api/problems/:id', asyncHandler(async (req, res, next) => {
+  try {
+    const problem = await Problem.findById(req.params.id);
+    
+    if (!problem || problem.metadata.isDeleted) {
+      return next(new AppError('Problem not found', 404));
+    }
+    
+    // Soft delete
+    problem.metadata.isDeleted = true;
+    problem.metadata.deletedAt = new Date();
+    await problem.save();
+    
+    logger.info(`Problem deleted: ${problem._id}`);
+    
+    res.json({
+      status: 'success',
+      message: 'Problem deleted successfully'
+    });
+  } catch (error) {
+    logger.error('Failed to delete problem:', error);
+    return next(new AppError('Failed to delete problem', 500));
+  }
+}));
+
+/**
  * Error Handling Middleware
  * Catches undefined routes and applies global error handling
  */
@@ -200,4 +365,9 @@ app.listen(port, () => {
   logger.info(`   - POST /api/upload - File upload`);
   logger.info(`   - POST /api/solve - Problem solving`);
   logger.info(`   - POST /api/generate-video - Video generation`);
+  logger.info(`   - POST /api/problems - Create problem`);
+  logger.info(`   - GET /api/problems - List problems`);
+  logger.info(`   - GET /api/problems/:id - Get problem`);
+  logger.info(`   - PUT /api/problems/:id - Update problem`);
+  logger.info(`   - DELETE /api/problems/:id - Delete problem`);
 });
