@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 // Import components
 import FileUpload from '../components/FileUpload';
 import ActionButtons from '../components/ActionButtons';
-import StatusDisplay from '../components/StatusDisplay';
+import SolutionDisplay from '../components/SolutionDisplay';
 
 // Import custom hook
 import useAITutorAPI from '../hooks/useAITutorAPI';
@@ -16,7 +16,7 @@ import useAITutorAPI from '../hooks/useAITutorAPI';
 function Tutor() {
   // State management for file and status
   const [selectedFile, setSelectedFile] = useState(null); // Currently selected file for upload
-  const [uploadStatus, setUploadStatus] = useState(''); // Status messages for user feedback
+  const [solution, setSolution] = useState(null); // Status messages for user feedback
 
   // Custom hook for API operations
   const { isLoading, uploadFile, solveProblem, generateVideo } = useAITutorAPI();
@@ -27,7 +27,7 @@ function Tutor() {
    */
   const handleFileSelect = (file) => {
     setSelectedFile(file);
-    setUploadStatus(''); // Clear any previous status messages
+    setSolution(null); // Clear any previous solutions
   };
 
   /**
@@ -39,27 +39,61 @@ function Tutor() {
       return;
     }
 
-    setUploadStatus('Uploading...');
+    setSolution({ type: 'loading', message: 'Uploading...' });
     const result = await uploadFile(selectedFile);
-    setUploadStatus(result.message);
+    setSolution({ type: 'success', message: result.message });
   };
 
   /**
    * Handles problem solving using the custom hook
    */
   const handleSolveProblem = async () => {
-    setUploadStatus('Solving problem...');
+    setSolution({ type: 'loading', message: 'Solving problem...' });
     const result = await solveProblem('Sample math problem');
-    setUploadStatus(result.message);
+    
+    // Create a solution object with steps
+    if (result.success) {
+      setSolution({ 
+        type: 'solution', 
+        title: 'Problem Solution',
+        steps: [
+          { number: 1, content: result.message },
+          { number: 2, content: 'Additional explanation or steps would appear here' }
+        ],
+        metadata: {
+          difficulty: 'Medium',
+          timeSpent: '2 minutes',
+          subject: 'Mathematics'
+        }
+      });
+    } else {
+      setSolution({ type: 'error', message: result.message || 'Failed to solve problem' });
+    }
   };
 
   /**
    * Handles video generation using the custom hook
    */
   const handleGenerateVideo = async () => {
-    setUploadStatus('Generating video...');
+    setSolution({ type: 'loading', message: 'Generating video...' });
     const result = await generateVideo('Sample educational content');
-    setUploadStatus(result.message);
+    
+    // Create a video solution object
+    if (result.success) {
+      setSolution({ 
+        type: 'video', 
+        title: 'Educational Video',
+        videoUrl: result.videoUrl || '/sample-video.mp4', // Use actual video URL from result
+        description: result.message || 'Generated educational video content',
+        metadata: {
+          duration: '5 minutes',
+          quality: 'HD',
+          subject: 'Education'
+        }
+      });
+    } else {
+      setSolution({ type: 'error', message: result.message || 'Failed to generate video' });
+    }
   };
 
   return (
@@ -92,8 +126,8 @@ function Tutor() {
             isLoading={isLoading}
           />
 
-          {/* Status display section */}
-          <StatusDisplay status={uploadStatus} />
+          {/* Solution display section */}
+          <SolutionDisplay solution={solution} />
         </main>
       </div>
     </div>
