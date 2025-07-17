@@ -15,6 +15,7 @@ This is a math AI tutor platform where students upload math problems via photo o
 ## Core Rules
 
 ### Always Do
+- **ALWAYS EXPLAIN WHAT YOU WILL DO AND HOW BEFORE IMPLEMENTING - NO EXCEPTIONS**
 - PRIORITIZE READABLE AND MAINTAINABLE CODE OVER SIMPLE IMPLEMENTATION
 - Explain what you will do and how you will do it in details before implementing
 - Always ask something before implementing

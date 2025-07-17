@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDropzone } from 'react-dropzone';
 
 /**
  * FileUpload Component
@@ -10,19 +11,57 @@ import React from 'react';
  */
 const FileUpload = ({ selectedFile, onFileSelect, onUpload, isLoading }) => {
   /**
-   * Handles file selection from input field
-   * Validates that selected file is an image format
-   * @param {Event} event - File input change event
+   * Configure dropzone with file validation
    */
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      // Validate file type - only allow image files
-      if (file.type.startsWith('image/')) {
-        onFileSelect(file);
-      } else {
+  const onDrop = (acceptedFiles, rejectedFiles) => {
+    // Handle rejected files
+    if (rejectedFiles.length > 0) {
+      const rejection = rejectedFiles[0];
+      if (rejection.errors.some(error => error.code === 'file-invalid-type')) {
         alert('Please select an image file (JPG, PNG, GIF, etc.)');
+      } else if (rejection.errors.some(error => error.code === 'file-too-large')) {
+        alert('File size too large. Please select an image under 5MB.');
+      } else {
+        alert('Invalid file. Please select a valid image file.');
       }
+      return;
+    }
+
+    // Handle accepted files
+    if (acceptedFiles.length > 0) {
+      const file = acceptedFiles[0];
+      onFileSelect(file);
+    }
+  };
+
+  const {
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    isDragReject,
+    isDragAccept
+  } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.bmp', '.webp']
+    },
+    maxFiles: 1,
+    maxSize: 5 * 1024 * 1024, // 5MB limit
+    multiple: false
+  });
+
+  // Dynamic styling based on drag state
+  const getDropzoneStyles = () => {
+    let baseStyles = "w-full p-8 border-2 border-dashed rounded-lg transition-all duration-300 cursor-pointer ";
+    
+    if (isDragAccept) {
+      return baseStyles + "border-green-400 bg-green-400 bg-opacity-10 text-green-200";
+    } else if (isDragReject) {
+      return baseStyles + "border-red-400 bg-red-400 bg-opacity-10 text-red-200";
+    } else if (isDragActive) {
+      return baseStyles + "border-blue-400 bg-blue-400 bg-opacity-10 text-blue-200";
+    } else {
+      return baseStyles + "border-white border-opacity-30 bg-white bg-opacity-10 text-white hover:border-opacity-50 hover:bg-opacity-15";
     }
   };
 
@@ -32,14 +71,35 @@ const FileUpload = ({ selectedFile, onFileSelect, onUpload, isLoading }) => {
         📁 Upload Problem Image
       </h2>
       
-      {/* File input with image validation */}
+      {/* Dropzone area with drag and drop */}
       <div className="mb-4">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleFileSelect}
-          className="w-full p-4 border-2 border-dashed border-white border-opacity-30 rounded-lg bg-white bg-opacity-10 text-white placeholder-white placeholder-opacity-70 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent transition-all duration-300"
-        />
+        <div {...getRootProps()} className={getDropzoneStyles()}>
+          <input {...getInputProps()} />
+          <div className="text-center">
+            {isDragActive ? (
+              isDragReject ? (
+                <>
+                  <div className="text-4xl mb-2">❌</div>
+                  <p className="text-lg font-semibold">Invalid file type</p>
+                  <p className="text-sm opacity-75">Please select an image file</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-4xl mb-2">📥</div>
+                  <p className="text-lg font-semibold">Drop your image here</p>
+                  <p className="text-sm opacity-75">Release to upload</p>
+                </>
+              )
+            ) : (
+              <>
+                <div className="text-4xl mb-2">📁</div>
+                <p className="text-lg font-semibold">Drag & drop an image here</p>
+                <p className="text-sm opacity-75 mt-1">or click to browse files</p>
+                <p className="text-xs opacity-50 mt-2">Supports: JPG, PNG, GIF, WebP (max 5MB)</p>
+              </>
+            )}
+          </div>
+        </div>
       </div>
       
       {/* Display selected file information */}
