@@ -165,12 +165,13 @@ const useAITutorAPI = () => {
   /**
    * Creates a problem in the database and retrieves solution steps
    * Integrates file upload with database storage and solution retrieval
-   * @param {Object} options - Options object containing files and classification
+   * @param {Object} options - Options object containing files, classification, and OCR data
    * @param {File[]} options.files - Array of uploaded problem image files
    * @param {Object} options.classification - Problem classification data
+   * @param {Object} options.ocrResult - OCR text extraction result from Tesseract.js
    * @returns {Object} Complete problem with solution steps
    */
-  const createAndSolveProblem = async ({ files, classification = {} }) => {
+  const createAndSolveProblem = async ({ files, classification = {}, ocrResult = null }) => {
     setIsLoading(true);
 
     try {
@@ -187,13 +188,32 @@ const useAITutorAPI = () => {
         return uploadResult;
       }
 
-      // Step 2: Create problem in database
+      // Step 2: Prepare problem data with OCR integration
       const problemData = {
         input: {
           originalImage: {
             url: uploadResult.data.path,
             filename: uploadResult.data.filename,
             size: uploadResult.data.size
+          },
+          // Include OCR text extraction results
+          textInput: ocrResult?.success ? {
+            rawText: ocrResult.text,
+            processedText: ocrResult.text.trim(),
+            confidence: ocrResult.confidence || 0,
+            extractionMethod: 'tesseract-js',
+            extractedAt: new Date().toISOString(),
+            metadata: {
+              wordCount: ocrResult.metadata?.wordCount || 0,
+              hasMatheticalContent: ocrResult.quality?.hasMathContent || false,
+              qualityScore: ocrResult.quality?.isGoodQuality ? 'good' : 'poor'
+            }
+          } : {
+            rawText: '',
+            processedText: '',
+            confidence: 0,
+            extractionMethod: 'none',
+            extractedAt: new Date().toISOString()
           },
           classification: {
             problemType: classification.problemType || 'algebra',
@@ -203,6 +223,7 @@ const useAITutorAPI = () => {
         }
       };
 
+      // Step 3: Create problem in database
       const response = await fetch('/api/problems', {
         method: 'POST',
         headers: {
@@ -215,7 +236,9 @@ const useAITutorAPI = () => {
         const result = await response.json();
         return {
           success: true,
-          message: 'Problem created and ready for solving!',
+          message: ocrResult?.success 
+            ? 'Problem created with text extraction completed!' 
+            : 'Problem created (OCR not available)',
           data: result.data.problem
         };
       } else {
