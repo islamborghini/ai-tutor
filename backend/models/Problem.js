@@ -50,7 +50,7 @@ const problemSchema = new Schema({
       }, // OCR confidence score (0-100)
       ocrEngine: {
         type: String,
-        enum: ['tesseract', 'google-vision'],
+        enum: ['tesseract'],
         default: 'tesseract'
       },
       processedAt: Date,

@@ -165,55 +165,55 @@ const useAITutorAPI = () => {
   /**
    * Creates a problem in the database and retrieves solution steps
    * Integrates file upload with database storage and solution retrieval
-   * @param {Object} options - Options object containing files, classification, and OCR data
-   * @param {File[]} options.files - Array of uploaded problem image files
+   * @param {Object} options - Options object containing files and/or problem text
+   * @param {File[]} options.files - Array of uploaded problem image files (optional)
+   * @param {string} options.problemText - Problem text (from OCR or manual input)
    * @param {Object} options.classification - Problem classification data
-   * @param {Object} options.ocrResult - OCR text extraction result from Tesseract.js
    * @returns {Object} Complete problem with solution steps
    */
-  const createAndSolveProblem = async ({ files, classification = {}, ocrResult = null }) => {
+  const createAndSolveProblem = async ({ files = [], problemText = '', classification = {} }) => {
     setIsLoading(true);
 
     try {
-      // Validate input
-      if (!files || !Array.isArray(files) || files.length === 0) {
-        throw new Error('No files provided');
+      // Validate input - need either files or problem text
+      if ((!files || files.length === 0) && !problemText.trim()) {
+        throw new Error('No files or problem text provided');
       }
 
-      const file = files[0]; // Use first file for now
+      let uploadResult = null;
 
-      // Step 1: Upload the file first
-      const uploadResult = await uploadFile(file);
-      if (!uploadResult.success) {
-        return uploadResult;
+      // Step 1: Upload the file if provided
+      if (files && files.length > 0) {
+        const file = files[0]; // Use first file for now
+        uploadResult = await uploadFile(file);
+        if (!uploadResult.success) {
+          return uploadResult;
+        }
       }
 
-      // Step 2: Prepare problem data with OCR integration
+      // Step 2: Prepare problem data
       const problemData = {
         input: {
-          originalImage: {
-            url: uploadResult.data.path,
-            filename: uploadResult.data.filename,
-            size: uploadResult.data.size
-          },
-          // Include OCR text extraction results
-          textInput: ocrResult?.success ? {
-            rawText: ocrResult.text,
-            processedText: ocrResult.text.trim(),
-            confidence: ocrResult.confidence || 0,
-            extractionMethod: 'tesseract-js',
+          // Include image data if file was uploaded
+          ...(uploadResult && {
+            originalImage: {
+              url: uploadResult.data.path,
+              filename: uploadResult.data.filename,
+              size: uploadResult.data.size
+            }
+          }),
+          // Include text input (from OCR or manual entry)
+          textInput: {
+            rawText: problemText,
+            processedText: problemText.trim(),
+            confidence: uploadResult ? 80 : 100, // Higher confidence for manual input
+            extractionMethod: uploadResult ? 'tesseract-js' : 'manual',
             extractedAt: new Date().toISOString(),
             metadata: {
-              wordCount: ocrResult.metadata?.wordCount || 0,
-              hasMatheticalContent: ocrResult.quality?.hasMathContent || false,
-              qualityScore: ocrResult.quality?.isGoodQuality ? 'good' : 'poor'
+              wordCount: problemText.trim().split(/\s+/).length,
+              hasMatheticalContent: /[+\-=<>()[\]{}^√∫∑π]/.test(problemText),
+              qualityScore: problemText.trim().length > 10 ? 'good' : 'poor'
             }
-          } : {
-            rawText: '',
-            processedText: '',
-            confidence: 0,
-            extractionMethod: 'none',
-            extractedAt: new Date().toISOString()
           },
           classification: {
             problemType: classification.problemType || 'algebra',
@@ -236,9 +236,9 @@ const useAITutorAPI = () => {
         const result = await response.json();
         return {
           success: true,
-          message: ocrResult?.success 
-            ? 'Problem created with text extraction completed!' 
-            : 'Problem created (OCR not available)',
+          message: uploadResult 
+            ? 'Problem created with image and text!' 
+            : 'Problem created from text input!',
           data: result.data.problem
         };
       } else {

@@ -1,23 +1,5 @@
 /**
- * Custom hook for OCR processing     try {
-      console.log('📝 Creating Tesseract worker...');
-      setProgress(10);
-      
-      // Create worker with language specified - newer Tesseract.js API
-      worker = await createWorker('eng');
-      console.log('✅ Worker created and initialized successfully');
-      setProgress(70);
-
-      console.log('🚀 Starting text recognition...');
-      const startTime = Date.now();
-
-      // Perform OCR recognition directly on the image file
-      const { data } = await worker.recognize(imageSource);
-      console.log('✅ OCR recognition completed:', {
-        text: data.text,
-        confidence: data.confidence,
-        wordCount: data.words?.length || 0
-      });.js
+ * Custom hook for OCR processing with Tesseract.js
  * Handles image text extraction with progress tracking and error handling
  * Used by FileUpload component for client-side OCR processing
  */

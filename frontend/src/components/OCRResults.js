@@ -1,7 +1,7 @@
 /**
  * OCRResults Component
  * Displays OCR extraction results with manual correction capabilities
- * Shows confidence scores, processing metadata, and validation feedback
+ * Shows confidence scores, processing metadata, validation feedback, and mathematical analysis
  */
 
 import React, { useState, useEffect } from 'react';
@@ -53,11 +53,17 @@ const OCRResults = ({
       recommendations.push('Consider retaking the photo with better lighting');
     }
 
-    // Check for mathematical content
-    const mathSymbols = /[+\-×÷=<>()[\]{}^√∫∑π]/;
-    const hasMathSymbols = mathSymbols.test(ocrResult.extractedText);
+    // Check for mathematical content using analysis or fallback
+    let hasMathContent = false;
+    if (ocrResult.mathAnalysis) {
+      hasMathContent = ocrResult.mathAnalysis.hasMathContent;
+    } else {
+      // Fallback to basic detection
+      const mathSymbols = /[+\-×÷=<>()[\]{}^√∫∑π]/;
+      hasMathContent = mathSymbols.test(ocrResult.extractedText);
+    }
 
-    if (!hasMathSymbols && ocrResult.extractedText.length > 10) {
+    if (!hasMathContent && ocrResult.extractedText.length > 10) {
       recommendations.push('Verify mathematical symbols were captured correctly');
     }
 
@@ -71,7 +77,7 @@ const OCRResults = ({
       isValid: issues.length === 0,
       issues,
       recommendations,
-      hasMathContent: hasMathSymbols,
+      hasMathContent,
       qualityScore: ocrResult.confidence
     });
   };
@@ -128,7 +134,7 @@ const OCRResults = ({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+    <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4 text-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">
@@ -142,14 +148,67 @@ const OCRResults = ({
         </div>
       </div>
 
+      {/* Mathematical Analysis Results - DISABLED FOR NOW */}
+      {result.mathAnalysis && false && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-md p-4">
+          <h4 className="text-sm font-medium text-purple-800 mb-3 flex items-center">
+            🧮 Mathematical Content Analysis
+          </h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <div className="bg-white p-3 rounded border text-center">
+              <div className="text-lg font-bold text-purple-600">
+                {result.mathAnalysis.hasMathContent ? '✅' : '❌'}
+              </div>
+              <div className="text-xs text-gray-600">Math Content</div>
+            </div>
+            <div className="bg-white p-3 rounded border text-center">
+              <div className="text-lg font-bold text-green-600">
+                {result.mathAnalysis.confidence || 0}%
+              </div>
+              <div className="text-xs text-gray-600">Math Confidence</div>
+            </div>
+            <div className="bg-white p-3 rounded border text-center">
+              <div className="text-lg font-bold text-blue-600 capitalize">
+                {result.mathAnalysis.statistics?.complexity || 'None'}
+              </div>
+              <div className="text-xs text-gray-600">Complexity</div>
+            </div>
+          </div>
+
+          {result.mathAnalysis.hasMathContent && result.mathAnalysis.statistics?.types && (
+            <div className="flex flex-wrap gap-2">
+              <span className="text-xs text-purple-700 font-medium">Categories found:</span>
+              {result.mathAnalysis.statistics.types.map((type, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs"
+                >
+                  {type} ({result.mathAnalysis.statistics.categories[type]})
+                </span>
+              ))}
+            </div>
+          )}
+
+          {result.mathAnalysis.recommendations && result.mathAnalysis.recommendations.length > 0 && (
+            <div className="mt-3 space-y-1">
+              <span className="text-xs text-purple-700 font-medium">Mathematical Recommendations:</span>
+              {result.mathAnalysis.recommendations.slice(0, 2).map((rec, index) => (
+                <div key={index} className="text-xs text-purple-600">
+                  • {rec.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Validation Feedback */}
       {validation && (
         <div className="space-y-2">
           {validation.issues.length > 0 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-              <h4 className="text-sm font-medium text-yellow-800 mb-1">
-                ⚠️ Quality Issues
-              </h4>
+              <h4 className="text-sm font-medium text-yellow-800 mb-1">⚠️ Issues Detected</h4>
               <ul className="text-sm text-yellow-700 list-disc list-inside">
                 {validation.issues.map((issue, index) => (
                   <li key={index}>{issue}</li>
@@ -160,9 +219,7 @@ const OCRResults = ({
 
           {validation.recommendations.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-              <h4 className="text-sm font-medium text-blue-800 mb-1">
-                💡 Recommendations
-              </h4>
+              <h4 className="text-sm font-medium text-blue-800 mb-1">💡 Recommendations</h4>
               <ul className="text-sm text-blue-700 list-disc list-inside">
                 {validation.recommendations.map((rec, index) => (
                   <li key={index}>{rec}</li>
@@ -173,105 +230,100 @@ const OCRResults = ({
         </div>
       )}
 
-      {/* Text Display/Editor */}
+      {/* Text Display/Edit Area */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700">
-            Extracted Text:
-          </label>
-          {isEditable && (
-            <button
-              onClick={toggleEditing}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              {isEditing ? '👁️ Preview' : '✏️ Edit'}
-            </button>
-          )}
-        </div>
-
         {isEditing ? (
-          <textarea
-            value={editedText}
-            onChange={handleTextChange}
-            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-32 font-mono text-sm bg-white text-gray-900 placeholder-gray-500"
-            placeholder="Edit the extracted text here..."
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Edit extracted text:
+            </label>
+            <textarea
+              value={editedText}
+              onChange={handleTextChange}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              rows={Math.max(3, Math.ceil(editedText.length / 80))}
+              placeholder="Edit the extracted text..."
+            />
+          </div>
         ) : (
-          <div className="p-3 bg-gray-50 border border-gray-200 rounded-md min-h-32">
-            <pre className="whitespace-pre-wrap font-mono text-sm text-gray-900">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Extracted text:
+            </label>
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-3 min-h-[100px] whitespace-pre-wrap text-gray-900">
               {editedText || 'No text extracted'}
-            </pre>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        {isEditable && (
+          <div className="flex flex-wrap gap-2">
+            {isEditing ? (
+              <>
+                <button
+                  onClick={handleAccept}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  ✓ Save Changes
+                </button>
+                <button
+                  onClick={toggleEditing}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={toggleEditing}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  ✏️ Edit Text
+                </button>
+                {onAccept && (
+                  <button
+                    onClick={() => handleAccept()}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  >
+                    ✓ Accept & Continue
+                  </button>
+                )}
+                {onRetry && (
+                  <button
+                    onClick={onRetry}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                  >
+                    🔄 Retry OCR
+                  </button>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* Processing Metadata */}
-      <div className="bg-gray-50 rounded-md p-3">
-        <h4 className="text-sm font-medium text-gray-700 mb-2">
-          Processing Details
-        </h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <span className="text-gray-500">Engine:</span>
-            <span className="ml-1 text-gray-900">
-              {result.metadata?.ocrEngine || 'Tesseract'}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-500">Time:</span>
-            <span className="ml-1 text-gray-900">
-              {result.metadata?.processingTime ? 
-                `${(result.metadata.processingTime / 1000).toFixed(1)}s` : 
-                'N/A'
-              }
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-500">Words:</span>
-            <span className="ml-1 text-gray-900">
-              {result.metadata?.wordsCount || result.words?.length || 0}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-500">Lines:</span>
-            <span className="ml-1 text-gray-900">
-              {result.metadata?.linesCount || result.lines?.length || 0}
-            </span>
+      {/* Metadata */}
+      {result.metadata && (
+        <div className="border-t pt-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">📊 Processing Details</h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-500">Engine:</span>
+              <span className="ml-1 font-medium">{result.metadata.ocrEngine}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Time:</span>
+              <span className="ml-1 font-medium">{result.metadata.processingTime}ms</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Words:</span>
+              <span className="ml-1 font-medium">{result.metadata.wordsCount}</span>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex justify-between items-center pt-2">
-        <button
-          onClick={onRetry}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
-        >
-          🔄 Retry OCR
-        </button>
-
-        <div className="flex space-x-3">
-          {isEditing && (
-            <button
-              onClick={() => {
-                setEditedText(result.extractedText);
-                setIsEditing(false);
-              }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            >
-              Cancel
-            </button>
-          )}
-          
-          <button
-            onClick={handleAccept}
-            disabled={!editedText.trim()}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ✅ Use This Text
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

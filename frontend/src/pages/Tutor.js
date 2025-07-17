@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 // Import components
 import FileUpload from '../components/FileUpload';
 import ActionButtons from '../components/ActionButtons';
 import SolutionDisplay from '../components/SolutionDisplay';
+import MathKeyboard from '../components/MathKeyboard';
 
 // Import custom hook
 import useAITutorAPI from '../hooks/useAITutorAPI';
@@ -19,6 +20,10 @@ function Tutor() {
   const [solution, setSolution] = useState(null); // Status messages for user feedback
   const [existingProblems, setExistingProblems] = useState([]); // Existing problems from database
   const [ocrResult, setOcrResult] = useState(null); // OCR extraction result
+  const [problemText, setProblemText] = useState(''); // Editable problem text
+
+  // Ref for the problem input textarea
+  const problemInputRef = useRef(null);
 
   // Custom hook for API operations
   const { 
@@ -62,6 +67,7 @@ function Tutor() {
     setSelectedFile(file);
     setSolution(null); // Clear any previous solutions
     setOcrResult(null); // Clear any previous OCR results
+    setProblemText(''); // Clear problem text when new file is selected
   };
 
   /**
@@ -70,6 +76,7 @@ function Tutor() {
    */
   const handleOCRComplete = (result) => {
     setOcrResult(result);
+    setProblemText(result.extractedText || ''); // Populate textarea with OCR result
     console.log('OCR completed:', result);
   };
 
@@ -91,15 +98,20 @@ function Tutor() {
    * Handles problem solving using the database integration
    */
   const handleSolveProblem = async () => {
-    if (!selectedFile) {
-      alert('Please select a file first');
+    // Check if we have either a file or problem text
+    if (!selectedFile && !problemText.trim()) {
+      alert('Please upload an image or enter a problem text first');
       return;
     }
 
     setSolution({ type: 'loading', message: 'Analyzing and solving problem...' });
     
     try {
-      const problemData = await createAndSolveProblem({ files: [selectedFile] });
+      // Pass both file and text to the API
+      const problemData = await createAndSolveProblem({ 
+        files: selectedFile ? [selectedFile] : [], 
+        problemText: problemText.trim()
+      });
       
       // Convert database problem to solution format
       if (problemData.success && problemData.data) {
@@ -220,11 +232,60 @@ function Tutor() {
             enableOCR={true}
           />
 
+          {/* Problem Text Input and Mathematical Keyboard Section */}
+          <div className="mb-8 p-6 bg-white bg-opacity-10 rounded-lg backdrop-blur-sm border border-white border-opacity-20">
+            <h2 className="text-2xl font-semibold mb-4 text-white">
+              ✏️ Enter or Edit Your Problem
+            </h2>
+            <p className="text-white text-opacity-80 text-sm mb-4">
+              Use the keyboard below to enter mathematical expressions, or edit the text extracted from your image.
+            </p>
+            
+            {/* Problem input textarea */}
+            <div className="mb-6">
+              <textarea
+                ref={problemInputRef}
+                value={problemText}
+                onChange={(e) => setProblemText(e.target.value)}
+                placeholder="e.g., Solve for x: 2x + 5 = 15, or enter any mathematical problem..."
+                className="w-full p-4 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out resize-none text-gray-800"
+                rows="4"
+              />
+              {problemText && (
+                <div className="mt-2 text-white text-opacity-70 text-sm">
+                  Character count: {problemText.length}
+                </div>
+              )}
+            </div>
+            
+            {/* Mathematical Keyboard */}
+            <MathKeyboard 
+              targetRef={problemInputRef}
+              onInsert={(symbol) => {
+                const textarea = problemInputRef.current;
+                if (!textarea) return;
+                
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const newText = problemText.substring(0, start) + symbol + problemText.substring(end);
+                setProblemText(newText);
+                
+                // Focus and set cursor position after insert
+                setTimeout(() => {
+                  textarea.focus();
+                  textarea.selectionStart = textarea.selectionEnd = start + symbol.length;
+                }, 0);
+              }}
+            />
+          </div>
+
           {/* AI action buttons section */}
           <ActionButtons
             onSolveProblem={handleSolveProblem}
             onGenerateVideo={handleGenerateVideo}
             isLoading={isLoading}
+            hasContent={!!selectedFile || !!problemText.trim()}
+            hasSolution={solution && solution.type === 'solution'}
           />
 
           {/* Solution display section */}
