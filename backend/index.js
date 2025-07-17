@@ -12,6 +12,7 @@ const morgan = require('morgan');
 
 // Import custom utilities and middleware
 const logger = require('./utils/logger');
+const { processImage, validateImage, createThumbnail } = require('./utils/imageProcessor');
 const { globalErrorHandler, AppError, asyncHandler, notFound } = require('./middleware/errorHandler');
 
 // Import database models
@@ -63,6 +64,17 @@ const upload = multer({
 });
 
 /**
+ * Ensure Upload Directories Exist
+ * Creates necessary directories for file storage and processing
+ */
+const fs = require('fs');
+const uploadsDir = 'uploads';
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  logger.info('📁 Created uploads directory');
+}
+
+/**
  * Express Middleware Configuration
  * Sets up JSON parsing, HTTP request logging, and static file serving
  */
@@ -85,11 +97,11 @@ app.get('/', (req, res) => {
 });
 
 /**
- * File Upload API Endpoint
+ * File Upload API Endpoint with Image Preprocessing
  * POST /api/upload
- * Accepts image files and stores them in the uploads directory
+ * Accepts image files, validates them, and applies preprocessing for better OCR
  * @param {File} problem - Image file containing the problem to solve
- * @returns {Object} Response with filename and upload confirmation
+ * @returns {Object} Response with original and processed file details
  */
 app.post('/api/upload', upload.single('problem'), asyncHandler(async (req, res, next) => {
   // Validate that a file was actually uploaded
@@ -97,20 +109,79 @@ app.post('/api/upload', upload.single('problem'), asyncHandler(async (req, res, 
     return next(new AppError('No file uploaded', 400));
   }
   
-  // Log successful upload for monitoring
-  logger.info(`File uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+  logger.info(`📁 File uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
   
-  // Return structured response with file details
-  res.json({ 
-    status: 'success',
-    message: 'File uploaded successfully',
-    data: {
+  try {
+    // Step 1: Validate the uploaded image
+    const validation = await validateImage(req.file.path);
+    if (!validation.isValid) {
+      return next(new AppError(`Invalid image: ${validation.issues.join(', ')}`, 400));
+    }
+    
+    logger.info(`✅ Image validation passed: ${validation.metadata.width}x${validation.metadata.height}`);
+    
+    // Step 2: Process the image for better OCR
+    const processingResult = await processImage(req.file.path, req.file.filename);
+    
+    // Step 3: Create thumbnail for preview
+    const thumbnailResult = await createThumbnail(req.file.path, req.file.filename);
+    
+    // Step 4: Prepare response data
+    const responseData = {
       filename: req.file.filename,
       originalname: req.file.originalname,
       size: req.file.size,
-      path: req.file.path
+      path: req.file.path,
+      mimetype: req.file.mimetype,
+      original: processingResult.original,
+      processed: processingResult.processed,
+      thumbnail: thumbnailResult.success ? thumbnailResult : null,
+      preprocessing: {
+        success: processingResult.success,
+        enhanced: processingResult.success,
+        optimizedForOCR: processingResult.success,
+        fallbackUsed: processingResult.fallbackToOriginal || false
+      }
+    };
+    
+    // Log processing results
+    if (processingResult.success) {
+      logger.info(`🎨 Image preprocessing completed successfully`);
+      logger.info(`📊 Enhancement: Resized=${processingResult.enhancement.resized}, OCR-optimized=true`);
+    } else {
+      logger.warn(`⚠️  Image preprocessing failed, using original: ${processingResult.error}`);
     }
-  });
+    
+    // Return structured response with all file versions
+    res.json({ 
+      status: 'success',
+      message: processingResult.success 
+        ? 'File uploaded and processed successfully' 
+        : 'File uploaded (processing failed, using original)',
+      data: responseData
+    });
+    
+  } catch (error) {
+    logger.error(`❌ Upload processing error: ${error.message}`);
+    
+    // Fallback response with just original file
+    res.json({ 
+      status: 'success',
+      message: 'File uploaded (processing unavailable)',
+      data: {
+        filename: req.file.filename,
+        originalname: req.file.originalname,
+        size: req.file.size,
+        path: req.file.path,
+        mimetype: req.file.mimetype,
+        preprocessing: {
+          success: false,
+          error: error.message,
+          fallbackUsed: true
+        }
+      }
+    });
+  }
 }));
 
 /**

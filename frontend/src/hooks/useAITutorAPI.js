@@ -35,10 +35,24 @@ const useAITutorAPI = () => {
       // Handle response based on status
       if (response.ok) {
         const result = await response.json();
+        
+        // Enhanced response includes preprocessing information
+        const processingInfo = result.data.preprocessing || {};
+        const successMessage = processingInfo.enhanced 
+          ? `Success! File uploaded and enhanced for better OCR processing: ${result.data.filename}`
+          : `Success! File uploaded: ${result.data.filename}`;
+          
         return {
           success: true,
-          message: `Success! File uploaded: ${result.data.filename}`,
-          data: result.data
+          message: successMessage,
+          data: {
+            ...result.data,
+            // Prefer processed version for OCR, fallback to original
+            ocrPath: result.data.processed?.path || result.data.path,
+            thumbnailPath: result.data.thumbnail?.path || null,
+            enhanced: processingInfo.enhanced || false,
+            optimizedForOCR: processingInfo.optimizedForOCR || false
+          }
         };
       } else {
         const error = await response.json();
