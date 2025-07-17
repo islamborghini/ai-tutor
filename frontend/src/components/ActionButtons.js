@@ -9,22 +9,26 @@ import React from 'react';
  */
 const ActionButtons = ({ onSolveProblem, onGenerateVideo, isLoading }) => {
   return (
-    <div className="actions-section">
-      <h2>🧠 AI Actions</h2>
-      <div className="button-group">
+    <div className="bg-white bg-opacity-15 backdrop-blur-sm rounded-xl p-6 mb-6 border border-white border-opacity-20 shadow-lg">
+      <h2 className="text-2xl font-semibold mb-6 text-center text-white">
+        🧠 AI Actions
+      </h2>
+      
+      <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
         {/* Problem solving button */}
         <button
           onClick={onSolveProblem}
           disabled={isLoading}
-          className="action-button solve-button"
+          className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:shadow-xl transform hover:-translate-y-1 disabled:transform-none transition-all duration-300 min-w-[180px] w-full sm:w-auto"
         >
           {isLoading ? '⏳ Processing...' : '🔍 Solve Problem'}
         </button>
+        
         {/* Video generation button */}
         <button
           onClick={onGenerateVideo}
           disabled={isLoading}
-          className="action-button video-button"
+          className="bg-gradient-to-r from-orange-400 to-yellow-500 hover:from-orange-500 hover:to-yellow-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-gray-800 font-semibold py-3 px-8 rounded-full shadow-lg hover:shadow-xl transform hover:-translate-y-1 disabled:transform-none transition-all duration-300 min-w-[180px] w-full sm:w-auto"
         >
           {isLoading ? '⏳ Generating...' : '🎥 Generate Video'}
         </button>

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import './App.css';
 
 // Import components
 import Header from './components/Header';
@@ -64,11 +63,11 @@ function App() {
   };
 
   return (
-    <div className="App">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 text-white">
       {/* Header section */}
       <Header />
 
-      <main className="App-main">
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* File upload section */}
         <FileUpload
           selectedFile={selectedFile}
