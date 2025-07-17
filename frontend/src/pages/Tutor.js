@@ -18,6 +18,7 @@ function Tutor() {
   const [selectedFile, setSelectedFile] = useState(null); // Currently selected file for upload
   const [solution, setSolution] = useState(null); // Status messages for user feedback
   const [existingProblems, setExistingProblems] = useState([]); // Existing problems from database
+  const [ocrResult, setOcrResult] = useState(null); // OCR extraction result
 
   // Custom hook for API operations
   const { 
@@ -60,6 +61,16 @@ function Tutor() {
   const handleFileSelect = (file) => {
     setSelectedFile(file);
     setSolution(null); // Clear any previous solutions
+    setOcrResult(null); // Clear any previous OCR results
+  };
+
+  /**
+   * Handles OCR completion from FileUpload component
+   * @param {Object} result - OCR processing result
+   */
+  const handleOCRComplete = (result) => {
+    setOcrResult(result);
+    console.log('OCR completed:', result);
   };
 
   /**
@@ -204,7 +215,9 @@ function Tutor() {
             selectedFile={selectedFile}
             onFileSelect={handleFileSelect}
             onUpload={handleUpload}
+            onOCRComplete={handleOCRComplete}
             isLoading={isLoading}
+            enableOCR={true}
           />
 
           {/* AI action buttons section */}

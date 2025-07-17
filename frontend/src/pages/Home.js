@@ -16,6 +16,7 @@ function Home() {
   // State management for file and status
   const [selectedFile, setSelectedFile] = useState(null); // Currently selected file for upload
   const [uploadStatus, setUploadStatus] = useState(''); // Status messages for user feedback
+  const [ocrResult, setOcrResult] = useState(null); // OCR extraction result
 
   // Custom hook for API operations
   const { isLoading, uploadFile, solveProblem, generateVideo } = useAITutorAPI();
@@ -27,6 +28,16 @@ function Home() {
   const handleFileSelect = (file) => {
     setSelectedFile(file);
     setUploadStatus(''); // Clear any previous status messages
+    setOcrResult(null); // Clear any previous OCR results
+  };
+
+  /**
+   * Handles OCR completion from FileUpload component
+   * @param {Object} result - OCR processing result
+   */
+  const handleOCRComplete = (result) => {
+    setOcrResult(result);
+    console.log('OCR completed:', result);
   };
 
   /**
@@ -80,7 +91,12 @@ function Home() {
             {/* File Upload Section */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">Upload Problem</h2>
-              <FileUpload onFileSelect={handleFileSelect} />
+              <FileUpload 
+                selectedFile={selectedFile}
+                onFileSelect={handleFileSelect} 
+                onOCRComplete={handleOCRComplete}
+                enableOCR={true}
+              />
             </div>
 
             {/* Actions Section */}

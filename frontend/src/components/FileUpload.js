@@ -1,15 +1,134 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
+import useOCRTest from '../hooks/useOCRTest';
+import OCRResults from './OCRResults';
 
 /**
  * FileUpload Component
- * Handles file selection, display, and upload functionality
+ * Handles file selection, display, upload functionality, and OCR processing
  * @param {File|null} selectedFile - Currently selected file
  * @param {function} onFileSelect - Callback when file is selected
  * @param {function} onUpload - Callback when upload button is clicked
+ * @param {function} onOCRComplete - Callback when OCR processing completes
  * @param {boolean} isLoading - Loading state for upload button
+ * @param {boolean} enableOCR - Whether to enable OCR processing
  */
-const FileUpload = ({ selectedFile, onFileSelect, onUpload, isLoading }) => {
+const FileUpload = ({ 
+  selectedFile, 
+  onFileSelect, 
+  onUpload, 
+  onOCRComplete,
+  isLoading, 
+  enableOCR = true 
+}) => {
+  // eslint-disable-next-line no-unused-vars
+  const [ocrText, setOcrText] = useState('');
+  const [isOCRInProgress, setIsOCRInProgress] = useState(false);
+  const [lastProcessedFile, setLastProcessedFile] = useState(null);
+  
+  // OCR hook for processing images
+  const {
+    isProcessing: isOCRProcessing,
+    progress: ocrProgress,
+    error: ocrError,
+    result: ocrResult,
+    processImage,
+    reset: resetOCR
+  } = useOCRTest();
+
+  /**
+   * Process selected file with OCR when file changes
+   */
+  useEffect(() => {
+    if (selectedFile && enableOCR && !isOCRInProgress && !isOCRProcessing) {
+      // Create unique key for this file to prevent re-processing
+      const fileKey = `${selectedFile.name}_${selectedFile.size}_${selectedFile.lastModified}`;
+      
+      if (lastProcessedFile !== fileKey) {
+        console.log('🔄 Starting OCR for new file:', selectedFile.name);
+        setLastProcessedFile(fileKey);
+        setIsOCRInProgress(true);
+        
+        // Start OCR processing directly with the file
+        processImage(selectedFile)
+          .then((result) => {
+            console.log('✅ OCR completed successfully:', result);
+            if (result) {
+              setOcrText(result.extractedText);
+              if (onOCRComplete) {
+                onOCRComplete(result);
+              }
+            }
+          })
+          .catch((error) => {
+            console.error('❌ OCR processing failed:', error);
+          })
+          .finally(() => {
+            setIsOCRInProgress(false);
+          });
+      } else {
+        console.log('🔄 File already processed, skipping OCR');
+      }
+    } else if (!selectedFile) {
+      // Clear OCR when no file
+      setOcrText('');
+      setIsOCRInProgress(false);
+      setLastProcessedFile(null);
+      resetOCR();
+    }
+  }, [selectedFile, enableOCR, isOCRInProgress, isOCRProcessing, lastProcessedFile, processImage, onOCRComplete, resetOCR]);
+
+  /**
+   * Handle OCR text changes from manual editing
+   */
+  const handleOCRTextChange = (newText) => {
+    setOcrText(newText);
+  };
+
+  /**
+   * Handle OCR acceptance
+   */
+  const handleOCRAccept = (finalText) => {
+    setOcrText(finalText);
+    if (onOCRComplete && ocrResult) {
+      onOCRComplete({
+        ...ocrResult,
+        extractedText: finalText,
+        isManuallyEdited: finalText !== ocrResult.extractedText
+      });
+    }
+  };
+
+  /**
+   * Handle OCR retry
+   */
+  const handleOCRRetry = () => {
+    if (selectedFile && enableOCR && !isOCRInProgress && !isOCRProcessing) {
+      console.log('🔄 Retrying OCR for file:', selectedFile.name);
+      setIsOCRInProgress(true);
+      resetOCR();
+      
+      processImage(selectedFile)
+        .then((result) => {
+          console.log('✅ OCR retry completed:', result);
+          if (result) {
+            setOcrText(result.extractedText);
+            if (onOCRComplete) {
+              onOCRComplete(result);
+            }
+          }
+        })
+        .catch((error) => {
+          console.error('❌ OCR retry failed:', error);
+        })
+        .finally(() => {
+          setIsOCRInProgress(false);
+        });
+    } else {
+      console.log('⏸️ OCR retry blocked - already in progress or no file');
+    }
+  };
+
   /**
    * Configure dropzone with file validation
    */
@@ -109,6 +228,52 @@ const FileUpload = ({ selectedFile, onFileSelect, onUpload, isLoading }) => {
             <span className="font-semibold">Selected:</span> {selectedFile.name} 
             <span className="text-white text-opacity-70"> ({Math.round(selectedFile.size / 1024)} KB)</span>
           </p>
+        </div>
+      )}
+
+      {/* OCR Progress Indicator */}
+      {enableOCR && selectedFile && isOCRProcessing && (
+        <div className="mb-4 p-4 bg-white bg-opacity-10 rounded-lg border border-white border-opacity-20">
+          <div className="text-white text-sm mb-2">
+            <span className="font-semibold">🔍 Extracting text from image...</span>
+          </div>
+          <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
+            <div 
+              className="bg-gradient-to-r from-blue-400 to-purple-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${ocrProgress}%` }}
+            ></div>
+          </div>
+          <div className="text-white text-xs mt-1 text-center">
+            {ocrProgress}% Complete
+          </div>
+        </div>
+      )}
+
+      {/* OCR Error Display */}
+      {enableOCR && ocrError && (
+        <div className="mb-4 p-4 bg-red-500 bg-opacity-20 rounded-lg border border-red-400 border-opacity-30">
+          <div className="text-white text-sm">
+            <span className="font-semibold">❌ OCR Error:</span> {ocrError.message}
+          </div>
+          <button
+            onClick={handleOCRRetry}
+            className="mt-2 text-xs text-blue-300 hover:text-blue-200 underline"
+          >
+            🔄 Retry OCR
+          </button>
+        </div>
+      )}
+
+      {/* OCR Results */}
+      {enableOCR && ocrResult && !isOCRProcessing && (
+        <div className="mb-4">
+          <OCRResults
+            result={ocrResult}
+            onTextChange={handleOCRTextChange}
+            onAccept={handleOCRAccept}
+            onRetry={handleOCRRetry}
+            isEditable={true}
+          />
         </div>
       )}
       
