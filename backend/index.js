@@ -91,6 +91,10 @@ if (process.env.NODE_ENV === 'development') {
  * Routes Definition
  */
 
+// Classification routes
+const classificationRoutes = require('./routes/classificationRoutes');
+app.use('/api/classification', classificationRoutes);
+
 // Root endpoint - basic health check
 app.get('/', (req, res) => {
   res.send('🤖 AI Tutor Backend Server - Ready to help with your learning!');
@@ -266,11 +270,66 @@ app.post('/api/problems', asyncHandler(async (req, res, next) => {
   const problemData = req.body;
   
   // Validate required fields
-  if (!problemData.input || !problemData.input.originalImage || !problemData.input.classification) {
+  if (!problemData.input || !problemData.input.originalImage) {
     return next(new AppError('Missing required problem data', 400));
   }
   
   try {
+    // Import classification service
+    const { classifyProblem } = require('./services/classificationService');
+    
+    // Extract text for classification (from OCR or manual input)
+    let problemText = '';
+    if (problemData.input.ocr && problemData.input.ocr.extractedText) {
+      problemText = problemData.input.ocr.extractedText;
+    } else if (problemData.input.userCorrections && problemData.input.userCorrections.correctedText) {
+      problemText = problemData.input.userCorrections.correctedText;
+    } else if (problemData.input.textInput && problemData.input.textInput.text) {
+      problemText = problemData.input.textInput.text;
+    }
+    
+    // Perform automatic classification if we have text
+    if (problemText) {
+      const classification = classifyProblem(problemText, {
+        imageSize: problemData.input.originalImage.size,
+        filename: problemData.input.originalImage.filename
+      });
+      
+      // Add classification to problem data
+      problemData.input.classification = classification;
+      
+      logger.info('Problem automatically classified', {
+        subject: classification.primarySubject,
+        difficulty: classification.difficulty,
+        gradeLevel: classification.gradeLevel.level
+      });
+    } else {
+      // Provide default classification if no text available
+      problemData.input.classification = {
+        primarySubject: 'arithmetic',
+        subjectScores: { arithmetic: 50 },
+        difficulty: 5,
+        gradeLevel: {
+          level: 'unknown',
+          range: [6, 12],
+          confidence: 0,
+          reasoning: 'No text available for classification'
+        },
+        complexity: {
+          score: 5,
+          factors: ['unknown'],
+          variableCount: 0,
+          operationCount: 0,
+          wordCount: 0
+        },
+        confidence: 0,
+        classifiedAt: new Date().toISOString(),
+        classificationVersion: '1.0'
+      };
+      
+      logger.warn('No text available for classification, using defaults');
+    }
+    
     // Create new problem document
     const problem = new Problem(problemData);
     await problem.save();

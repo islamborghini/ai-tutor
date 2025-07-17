@@ -5,9 +5,11 @@ import FileUpload from '../components/FileUpload';
 import ActionButtons from '../components/ActionButtons';
 import SolutionDisplay from '../components/SolutionDisplay';
 import MathKeyboard from '../components/MathKeyboard';
+import ClassificationDisplay from '../components/ClassificationDisplay';
 
-// Import custom hook
+// Import custom hooks
 import useAITutorAPI from '../hooks/useAITutorAPI';
+import useClassification from '../hooks/useClassification';
 
 /**
  * AI Tutor Page Component
@@ -19,13 +21,13 @@ function Tutor() {
   const [selectedFile, setSelectedFile] = useState(null); // Currently selected file for upload
   const [solution, setSolution] = useState(null); // Status messages for user feedback
   const [existingProblems, setExistingProblems] = useState([]); // Existing problems from database
-  const [ocrResult, setOcrResult] = useState(null); // OCR extraction result
   const [problemText, setProblemText] = useState(''); // Editable problem text
+  const [classification, setClassification] = useState(null); // Problem classification
 
   // Ref for the problem input textarea
   const problemInputRef = useRef(null);
 
-  // Custom hook for API operations
+  // Custom hooks for API operations
   const { 
     isLoading, 
     uploadFile, 
@@ -33,6 +35,11 @@ function Tutor() {
     createAndSolveProblem,
     getProblems
   } = useAITutorAPI();
+
+  const { 
+    classifyProblem, 
+    isClassifying 
+  } = useClassification();
 
   // Load existing problems on component mount
   React.useEffect(() => {
@@ -66,18 +73,56 @@ function Tutor() {
   const handleFileSelect = (file) => {
     setSelectedFile(file);
     setSolution(null); // Clear any previous solutions
-    setOcrResult(null); // Clear any previous OCR results
     setProblemText(''); // Clear problem text when new file is selected
+    setClassification(null); // Clear previous classification
   };
 
   /**
    * Handles OCR completion from FileUpload component
    * @param {Object} result - OCR processing result
    */
-  const handleOCRComplete = (result) => {
-    setOcrResult(result);
-    setProblemText(result.extractedText || ''); // Populate textarea with OCR result
+  const handleOCRComplete = async (result) => {
+    const extractedText = result.extractedText || '';
+    setProblemText(extractedText); // Populate textarea with OCR result
+    
+    // Automatically classify the extracted text
+    if (extractedText.trim()) {
+      try {
+        const classificationResult = await classifyProblem(extractedText);
+        setClassification(classificationResult);
+      } catch (error) {
+        console.error('Classification failed:', error);
+      }
+    }
+    
     console.log('OCR completed:', result);
+  };
+
+  /**
+   * Handle text changes in the problem input area
+   * @param {string} text - New text content
+   */
+  const handleTextChange = async (text) => {
+    setProblemText(text);
+    
+    // Auto-classify when user stops typing (debounced)
+    if (text.trim()) {
+      // Simple debouncing - clear previous timeout
+      if (handleTextChange.timeoutId) {
+        clearTimeout(handleTextChange.timeoutId);
+      }
+      
+      handleTextChange.timeoutId = setTimeout(async () => {
+        try {
+          const classificationResult = await classifyProblem(text);
+          setClassification(classificationResult);
+        } catch (error) {
+          console.error('Classification failed:', error);
+        }
+      }, 1000); // 1 second delay
+    } else {
+      setClassification(null);
+    }
   };
 
   /**
@@ -246,7 +291,7 @@ function Tutor() {
               <textarea
                 ref={problemInputRef}
                 value={problemText}
-                onChange={(e) => setProblemText(e.target.value)}
+                onChange={(e) => handleTextChange(e.target.value)}
                 placeholder="e.g., Solve for x: 2x + 5 = 15, or enter any mathematical problem..."
                 className="w-full p-4 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out resize-none text-gray-800"
                 rows="4"
@@ -257,26 +302,51 @@ function Tutor() {
                 </div>
               )}
             </div>
-            
+
             {/* Mathematical Keyboard */}
-            <MathKeyboard 
-              targetRef={problemInputRef}
-              onInsert={(symbol) => {
-                const textarea = problemInputRef.current;
-                if (!textarea) return;
-                
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const newText = problemText.substring(0, start) + symbol + problemText.substring(end);
-                setProblemText(newText);
-                
-                // Focus and set cursor position after insert
-                setTimeout(() => {
-                  textarea.focus();
-                  textarea.selectionStart = textarea.selectionEnd = start + symbol.length;
-                }, 0);
-              }}
-            />
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-white mb-3">Mathematical Keyboard</h3>
+              <MathKeyboard 
+                targetRef={problemInputRef}
+                onInsert={(symbol) => {
+                  const textarea = problemInputRef.current;
+                  if (!textarea) return;
+                  
+                  const start = textarea.selectionStart;
+                  const end = textarea.selectionEnd;
+                  const newText = problemText.substring(0, start) + symbol + problemText.substring(end);
+                  
+                  handleTextChange(newText);
+                  
+                  // Set cursor position after insert
+                  setTimeout(() => {
+                    textarea.focus();
+                    textarea.selectionStart = textarea.selectionEnd = start + symbol.length;
+                  }, 0);
+                }}
+              />
+            </div>
+
+            {/* Classification Display */}
+            {(classification || isClassifying) && (
+              <div className="mb-6">
+                {isClassifying ? (
+                  <div className="bg-white bg-opacity-10 rounded-lg p-4 text-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mx-auto mb-2"></div>
+                    <p className="text-white text-opacity-80 text-sm">Analyzing problem...</p>
+                  </div>
+                ) : (
+                  <ClassificationDisplay 
+                    classification={classification}
+                    showDetails={true}
+                    onFeedback={(type, data) => {
+                      console.log('Classification feedback:', type, data);
+                      // Here you could implement feedback submission
+                    }}
+                  />
+                )}
+              </div>
+            )}
           </div>
 
           {/* AI action buttons section */}
@@ -284,7 +354,7 @@ function Tutor() {
             onSolveProblem={handleSolveProblem}
             onGenerateVideo={handleGenerateVideo}
             isLoading={isLoading}
-            hasContent={!!selectedFile || !!problemText.trim()}
+            hasContent={Boolean(selectedFile || problemText.trim())}
             hasSolution={solution && solution.type === 'solution'}
           />
 

@@ -65,23 +65,80 @@ const problemSchema = new Schema({
       correctedBy: { type: Schema.Types.ObjectId, ref: 'User' }
     },
     
-    // Problem classification
+    // Problem classification and analysis
     classification: {
+      // Primary subject classification
+      primarySubject: {
+        type: String,
+        enum: ['algebra', 'geometry', 'calculus', 'trigonometry', 'statistics', 'arithmetic', 'other'],
+        required: true,
+        default: 'arithmetic'
+      },
+      
+      // Subject confidence scores (0-100 for each subject)
+      subjectScores: {
+        algebra: { type: Number, min: 0, max: 100, default: 0 },
+        geometry: { type: Number, min: 0, max: 100, default: 0 },
+        calculus: { type: Number, min: 0, max: 100, default: 0 },
+        trigonometry: { type: Number, min: 0, max: 100, default: 0 },
+        statistics: { type: Number, min: 0, max: 100, default: 0 },
+        arithmetic: { type: Number, min: 0, max: 100, default: 0 }
+      },
+      
+      // Difficulty assessment (1-10 scale)
+      difficulty: {
+        type: Number,
+        min: 1,
+        max: 10,
+        required: true,
+        default: 5
+      },
+      
+      // Grade level detection
+      gradeLevel: {
+        level: {
+          type: String,
+          enum: ['middleSchool', 'highSchool', 'college', 'unknown'],
+          required: true,
+          default: 'unknown'
+        },
+        range: [{ type: Number, min: 1, max: 16 }], // Grade range [6,8] or [9,12]
+        confidence: { type: Number, min: 0, max: 100, default: 50 },
+        reasoning: String // Explanation for grade level assignment
+      },
+      
+      // Complexity analysis
+      complexity: {
+        score: { type: Number, min: 1, max: 10, default: 5 },
+        factors: [String], // ['multiple variables', 'calculus concepts', etc.]
+        variableCount: { type: Number, min: 0, default: 0 },
+        operationCount: { type: Number, min: 0, default: 0 },
+        wordCount: { type: Number, min: 0, default: 0 }
+      },
+      
+      // Classification confidence and metadata
+      confidence: { type: Number, min: 0, max: 100, default: 50 },
+      classifiedAt: { type: Date, default: Date.now },
+      classificationVersion: { type: String, default: '1.0' },
+      
+      // Legacy fields for backward compatibility
       problemType: {
         type: String,
-        enum: ['algebra', 'geometry', 'calculus', 'statistics', 'trigonometry', 'arithmetic', 'word-problem', 'other'],
-        required: true
-      },
-      gradeLevel: {
-        type: String,
-        enum: ['middle-school', 'high-school', 'college', 'advanced'],
-        required: true
+        enum: ['algebra', 'geometry', 'calculus', 'statistics', 'trigonometry', 'arithmetic', 'word-problem', 'other']
       },
       subjectArea: [String], // ['equations', 'functions', 'graphing', etc.]
-      difficulty: {
-        type: String,
-        enum: ['easy', 'medium', 'hard', 'expert'],
-        required: true
+      
+      // Feedback and improvement tracking
+      feedback: {
+        userCorrections: [{
+          field: String, // 'primarySubject', 'difficulty', 'gradeLevel'
+          oldValue: String,
+          newValue: String,
+          correctedAt: Date,
+          correctedBy: { type: Schema.Types.ObjectId, ref: 'User' }
+        }],
+        accuracyScore: { type: Number, min: 0, max: 100 }, // Based on solution success
+        lastUpdated: Date
       }
     }
   },
