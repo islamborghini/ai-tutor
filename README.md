@@ -1,3 +1,5 @@
+# Still in production, so not deployed YET.
+
 # 🤖 AI Math Tutor Platform
 
 An intelligent mathematics tutoring platform that helps middle and high school students solve math problems through image uploads, text input, and AI-generated step-by-step solutions with Khan Academy-style whiteboard videos.
